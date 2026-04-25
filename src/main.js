@@ -285,7 +285,7 @@ async function resizeWindowToContent() {
   const newHeightPx = Math.max(Math.round(200 * dpr), contentHeightPx + vertChromePx)
   if (newHeightPx === lastSetHeightPx) return
   lastSetHeightPx = newHeightPx
-  await win.setSize(new PhysicalSize(outerSize.width, newHeightPx))
+  await win.setSize(new PhysicalSize(Math.round(window.innerWidth * dpr), newHeightPx))
 }
 
 // Init
