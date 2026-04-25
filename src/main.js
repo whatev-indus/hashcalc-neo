@@ -21,6 +21,11 @@ const ALL_ALGOS = [
   { id: 'whirlpool', label: 'Whirlpool' },
 ]
 
+const ALL_SETTINGS_ALGOS = [
+  { id: 'size', label: 'Size (bytes)' },
+  ...ALL_ALGOS,
+]
+
 const STORAGE_KEY_VISIBLE = 'hashcalc_visible'
 const STORAGE_KEY_CHECKED = 'hashcalc_checked'
 
@@ -46,14 +51,16 @@ let visibleAlgos = loadVisible()
 let checkedAlgos = loadChecked()
 let selectedFile  = null
 
-const headerBrowse = document.getElementById('header-browse')
-const algoList     = document.getElementById('algo-list')
-const sizeRow      = document.getElementById('size-row')
-const sizeValue    = document.getElementById('size-value')
-const progressWrap = document.getElementById('progress-wrap')
-const progressFill = document.getElementById('progress-fill')
-const progressLabel= document.getElementById('progress-label')
-const settingsBtn  = document.getElementById('settings-btn')
+const headerBrowse   = document.getElementById('header-browse')
+const algoList       = document.getElementById('algo-list')
+const sizeRow        = document.getElementById('size-row')
+const sizeValue      = document.getElementById('size-value')
+const progressWrap   = document.getElementById('progress-wrap')
+const progressFill   = document.getElementById('progress-fill')
+const progressLabel  = document.getElementById('progress-label')
+const settingsBtn    = document.getElementById('settings-btn')
+const settingsPanel  = document.getElementById('settings-panel')
+const settingsList   = document.getElementById('settings-panel-list')
 
 // Build single-column algorithm rows with inline hash boxes
 function renderAlgoList() {
@@ -223,14 +230,69 @@ listen('tauri://drag-drop', (event) => {
   if (paths && paths.length > 0) setFilePath(paths[0])
 })
 
-// Settings window
-settingsBtn.addEventListener('click', () => invoke('open_settings'))
+// Inline settings panel
+function renderSettingsPanel() {
+  settingsList.innerHTML = ''
+  ALL_SETTINGS_ALGOS.forEach((algo, i) => {
+    const label = document.createElement('label')
+    label.className = 'settings-item'
 
-listen('settings-saved', async () => {
-  visibleAlgos = loadVisible()
-  checkedAlgos = loadChecked()
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.value = algo.id
+    input.checked = visibleAlgos.has(algo.id)
+    input.addEventListener('change', () => {
+      if (input.checked) visibleAlgos.add(algo.id)
+      else visibleAlgos.delete(algo.id)
+      localStorage.setItem(STORAGE_KEY_VISIBLE, JSON.stringify([...visibleAlgos]))
+      checkedAlgos = new Set([...checkedAlgos].filter(id => visibleAlgos.has(id)))
+      localStorage.setItem(STORAGE_KEY_CHECKED, JSON.stringify([...checkedAlgos]))
+      renderAlgoList()
+      resizeWindowToContent()
+    })
+
+    const box = document.createElement('span')
+    box.className = 'settings-checkbox'
+
+    const text = document.createElement('span')
+    text.className = 'settings-label'
+    text.textContent = algo.label
+
+    label.appendChild(input)
+    label.appendChild(box)
+    label.appendChild(text)
+    settingsList.appendChild(label)
+
+    if (i === 0) {
+      const divider = document.createElement('div')
+      divider.className = 'settings-divider'
+      settingsList.appendChild(divider)
+    }
+  })
+}
+
+settingsBtn.addEventListener('click', () => {
+  const nowVisible = settingsPanel.classList.toggle('hidden') === false
+  if (nowVisible) renderSettingsPanel()
+  resizeWindowToContent()
+})
+
+document.getElementById('settings-all').addEventListener('click', () => {
+  visibleAlgos = new Set(ALL_SETTINGS_ALGOS.map(a => a.id))
+  localStorage.setItem(STORAGE_KEY_VISIBLE, JSON.stringify([...visibleAlgos]))
+  renderSettingsPanel()
   renderAlgoList()
-  await resizeWindowToContent()
+  resizeWindowToContent()
+})
+
+document.getElementById('settings-none').addEventListener('click', () => {
+  visibleAlgos = new Set()
+  checkedAlgos = new Set()
+  localStorage.setItem(STORAGE_KEY_VISIBLE, JSON.stringify([]))
+  localStorage.setItem(STORAGE_KEY_CHECKED, JSON.stringify([]))
+  renderSettingsPanel()
+  renderAlgoList()
+  resizeWindowToContent()
 })
 
 let lastSetHeightPx = 0

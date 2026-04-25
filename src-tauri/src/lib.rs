@@ -159,25 +159,6 @@ fn get_file_size(file_path: String) -> Result<u64, String> {
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-fn open_settings(app: tauri::AppHandle) {
-    use tauri::Manager;
-    if let Some(win) = app.get_webview_window("settings") {
-        let _ = win.show();
-        let _ = win.set_focus();
-        return;
-    }
-    let _ = tauri::WebviewWindowBuilder::new(
-        &app,
-        "settings",
-        tauri::WebviewUrl::App("settings.html".into()),
-    )
-    .title("Algorithm Settings")
-    .inner_size(360.0, 200.0)
-    .resizable(false)
-    .center()
-    .build();
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -194,7 +175,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![compute_hash, open_settings, get_file_size])
+        .invoke_handler(tauri::generate_handler![compute_hash, get_file_size])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

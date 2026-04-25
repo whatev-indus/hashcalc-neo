@@ -288,24 +288,36 @@ header h1 {
 .settings-item input:checked + .settings-checkbox::after { opacity: 1; border-color: #fff; }
 .settings-label { font-size: 14px; font-weight: 500; }
 
-#settings-footer {
+#settings-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+#settings-panel-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 6px;
+}
+
+#settings-panel-footer {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
-  flex-wrap: wrap;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
 }
-#settings-footer button {
+#settings-panel-footer button {
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: var(--radius-sm);
-  padding: 7px 14px;
-  font-size: 14px;
+  padding: 5px 12px;
+  font-size: 13px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
-#settings-footer button:hover { border-color: var(--accent); }
-#settings-footer button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
-#settings-footer button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+#settings-panel-footer button:hover { border-color: var(--accent); }
 
 .hidden { display: none !important; }
