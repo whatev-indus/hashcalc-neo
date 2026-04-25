@@ -1,5 +1,6 @@
 import { emit } from '@tauri-apps/api/event'
 import { getCurrentWindow, PhysicalSize } from '@tauri-apps/api/window'
+import './style.css'
 
 const win = getCurrentWindow()
 
