@@ -234,6 +234,8 @@ listen('settings-saved', async () => {
   await resizeWindowToContent()
 })
 
+let lastSetHeight = 0
+
 async function resizeWindowToContent() {
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
   const win = getCurrentWindow()
@@ -243,7 +245,10 @@ async function resizeWindowToContent() {
   const app = document.getElementById('app')
   const bodyStyle = getComputedStyle(document.body)
   const contentHeight = app.getBoundingClientRect().bottom + parseFloat(bodyStyle.paddingBottom)
-  await win.setSize(new LogicalSize(outerSize.width / dpr, Math.max(200, Math.ceil(contentHeight + chrome))))
+  const newHeight = Math.max(200, Math.ceil(contentHeight + chrome))
+  if (newHeight === lastSetHeight) return
+  lastSetHeight = newHeight
+  await win.setSize(new LogicalSize(Math.round(outerSize.width / dpr), newHeight))
 }
 
 // Init
