@@ -9,13 +9,52 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - run: npm install
+
+      - run: npm run tauri build -- --bundles app
+
+      - name: Package and publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APP_PATH=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name "*.app" | head -1)
+          codesign --force --deep --sign - "$APP_PATH"
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          ZIP_NAME="HashCalc.Neo_${VERSION}_macOS.zip"
+          ditto -c -k --sequester-rsrc --keepParent "$APP_PATH" "$ZIP_NAME"
+          gh release create "${{ github.ref_name }}" \
+            --title "HashCalc Neo ${{ github.ref_name }}" \
+            --notes "Download the appropriate file for your platform below.
+
+> ⚠️ Windows & Linux builds not yet tested.
+
+> **macOS:** If macOS blocks the app, right-click → Open to bypass Gatekeeper." \
+            --draft \
+            "$ZIP_NAME" \
+            || gh release upload "${{ github.ref_name }}" "$ZIP_NAME" --repo "${{ github.repository }}" --clobber
+
+  build-windows-linux:
+    needs: build-macos
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
-            args: '--bundles app'
           - platform: ubuntu-22.04
             args: '--bundles appimage'
           - platform: windows-latest
@@ -52,22 +91,8 @@ jobs:
             Download the appropriate file for your platform below.
 
             > ⚠️ Windows & Linux builds not yet tested.
+
+            > **macOS:** If macOS blocks the app, right-click → Open to bypass Gatekeeper.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
-
-      - name: Repackage macOS build as zip
-        if: matrix.platform == 'macos-latest'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          APP_PATH=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name "*.app" | head -1)
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"
-          ZIP_NAME="HashCalc.Neo_${VERSION}_MacOS_ARM.zip"
-          ditto -c -k --sequester-rsrc --keepParent "$APP_PATH" "src-tauri/target/release/bundle/macos/$ZIP_NAME"
-          gh release upload "${{ github.ref_name }}" "src-tauri/target/release/bundle/macos/$ZIP_NAME" --repo "${{ github.repository }}" --clobber
-          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ github.ref_name }} --jq '.id')
-          gh api repos/${{ github.repository }}/releases/$RELEASE_ID/assets --jq '.[] | select(.name | endswith(".tar.gz")) | .id' | while IFS= read -r id; do
-            gh api --method DELETE repos/${{ github.repository }}/releases/assets/$id
-          done
