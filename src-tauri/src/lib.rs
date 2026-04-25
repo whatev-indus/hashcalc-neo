@@ -163,6 +163,7 @@ fn get_file_size(file_path: String) -> Result<u64, String> {
 fn open_settings(app: tauri::AppHandle) {
     use tauri::Manager;
     if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.show();
         let _ = win.set_focus();
         return;
     }

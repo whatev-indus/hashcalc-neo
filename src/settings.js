@@ -88,7 +88,12 @@ settingsSave.addEventListener('click', async () => {
   } catch {}
 
   await emit('settings-saved')
-  getCurrentWindow().close()
+  getCurrentWindow().hide()
+})
+
+window.addEventListener('focus', () => {
+  renderList()
+  resizeToContent()
 })
 
 async function resizeToContent() {
