@@ -64,9 +64,10 @@ jobs:
           APP_PATH=$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name "*.app" | head -1)
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
-          ZIP_NAME="HashCalc.Neo_${VERSION}_mac_arm.zip"
+          ZIP_NAME="HashCalc.Neo_${VERSION}_MacOS_ARM.zip"
           ditto -c -k --sequester-rsrc --keepParent "$APP_PATH" "src-tauri/target/release/bundle/macos/$ZIP_NAME"
           gh release upload "${{ github.ref_name }}" "src-tauri/target/release/bundle/macos/$ZIP_NAME" --repo "${{ github.repository }}" --clobber
-          for asset in $(gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json assets -q '.assets[].name' | grep '\.tar\.gz$'); do
-            gh release delete-asset "${{ github.ref_name }}" "$asset" --repo "${{ github.repository }}" --yes 2>/dev/null || true
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ github.ref_name }} --jq '.id')
+          gh api repos/${{ github.repository }}/releases/$RELEASE_ID/assets --jq '.[] | select(.name | endswith(".tar.gz")) | .id' | while IFS= read -r id; do
+            gh api --method DELETE repos/${{ github.repository }}/releases/assets/$id
           done
