@@ -15,7 +15,7 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            args: ''
+            args: '--bundles app'
           - platform: ubuntu-22.04
             args: '--bundles appimage'
           - platform: windows-latest
