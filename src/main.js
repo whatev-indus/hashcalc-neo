@@ -253,9 +253,3 @@ async function resizeWindowToContent() {
 // Init
 renderAlgoList()
 resizeWindowToContent()
-
-let resizeTimer
-new ResizeObserver(() => {
-  clearTimeout(resizeTimer)
-  resizeTimer = setTimeout(resizeWindowToContent, 50)
-}).observe(document.getElementById('app'))
