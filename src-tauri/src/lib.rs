@@ -153,6 +153,13 @@ fn compute_hash(file_path: String, algorithm: String) -> Result<String, String> 
 }
 
 #[tauri::command]
+fn get_file_size(file_path: String) -> Result<u64, String> {
+    std::fs::metadata(&file_path)
+        .map(|m| m.len())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn open_settings(app: tauri::AppHandle) {
     use tauri::Manager;
     if let Some(win) = app.get_webview_window("settings") {
@@ -186,7 +193,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![compute_hash, open_settings])
+        .invoke_handler(tauri::generate_handler![compute_hash, open_settings, get_file_size])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -2,6 +2,7 @@ import { emit } from '@tauri-apps/api/event'
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 
 const ALL_ALGOS = [
+  { id: 'size',      label: 'Size (bytes)' },
   { id: 'md5',       label: 'MD5' },
   { id: 'sha1',      label: 'SHA-1' },
   { id: 'sha224',    label: 'SHA-224' },
@@ -38,7 +39,7 @@ const settingsSave  = document.getElementById('settings-save')
 
 function renderList() {
   settingsList.innerHTML = ''
-  ALL_ALGOS.forEach(algo => {
+  ALL_ALGOS.forEach((algo, i) => {
     const label = document.createElement('label')
     label.className = 'settings-item'
 
@@ -58,6 +59,11 @@ function renderList() {
     label.appendChild(box)
     label.appendChild(text)
     settingsList.appendChild(label)
+    if (i === 0) {
+      const divider = document.createElement('div')
+      divider.className = 'settings-divider'
+      settingsList.appendChild(divider)
+    }
   })
 }
 

@@ -49,6 +49,8 @@ let selectedFile  = null
 
 const headerBrowse = document.getElementById('header-browse')
 const algoList     = document.getElementById('algo-list')
+const sizeRow      = document.getElementById('size-row')
+const sizeValue    = document.getElementById('size-value')
 const progressWrap = document.getElementById('progress-wrap')
 const progressFill = document.getElementById('progress-fill')
 const progressLabel= document.getElementById('progress-label')
@@ -57,7 +59,18 @@ const settingsBtn  = document.getElementById('settings-btn')
 // Build single-column algorithm rows with inline hash boxes
 function renderAlgoList() {
   algoList.innerHTML = ''
+  sizeRow.classList.toggle('hidden', !visibleAlgos.has('size'))
+
   const visible = ALL_ALGOS.filter(a => visibleAlgos.has(a.id))
+
+  if (visible.length === 0) {
+    const msg = document.createElement('div')
+    msg.className = 'algo-empty'
+    msg.textContent = 'Select Hashes to display in the Settings.'
+    algoList.appendChild(msg)
+    return
+  }
+
   visible.forEach(algo => {
     const row = document.createElement('div')
     row.className = 'algo-row'
@@ -128,14 +141,33 @@ function clearHashResults() {
     box.textContent = '—'
     box.classList.remove('has-value', 'copied')
   })
+  sizeValue.dataset.size = ''
+  sizeValue.textContent = '—'
+  sizeValue.classList.remove('has-value', 'copied')
 }
 
 async function calculateHashes(filePath) {
   const selected = [...checkedAlgos].filter(id => visibleAlgos.has(id))
-  if (selected.length === 0) return
 
   progressWrap.classList.remove('hidden')
   clearHashResults()
+
+  if (visibleAlgos.has('size')) {
+    try {
+      const bytes = await invoke('get_file_size', { filePath })
+      const display = bytes.toLocaleString() + ' bytes'
+      sizeValue.dataset.size = display
+      sizeValue.textContent = display
+      sizeValue.classList.add('has-value')
+    } catch (err) {
+      sizeValue.textContent = `Error: ${err}`
+    }
+  }
+
+  if (selected.length === 0) {
+    progressWrap.classList.add('hidden')
+    return
+  }
 
   const total = selected.length
   let done = 0
@@ -168,6 +200,19 @@ async function openFilePicker() {
   if (path) setFilePath(path)
 }
 
+sizeValue.addEventListener('click', () => {
+  if (!sizeValue.classList.contains('has-value')) return
+  navigator.clipboard.writeText(sizeValue.dataset.size).then(() => {
+    sizeValue.classList.add('copied')
+    const prev = sizeValue.textContent
+    sizeValue.textContent = 'Copied!'
+    setTimeout(() => {
+      sizeValue.classList.remove('copied')
+      sizeValue.textContent = prev
+    }, 1200)
+  })
+})
+
 headerBrowse.addEventListener('click', openFilePicker)
 
 document.addEventListener('dragover', (e) => e.preventDefault())
@@ -197,7 +242,7 @@ async function resizeWindowToContent() {
   const app = document.getElementById('app')
   const bodyStyle = getComputedStyle(document.body)
   const contentHeight = app.getBoundingClientRect().bottom + parseFloat(bodyStyle.paddingBottom)
-  await win.setSize(new LogicalSize(outerSize.width / dpr, Math.ceil(contentHeight + chrome)))
+  await win.setSize(new LogicalSize(outerSize.width / dpr, Math.max(200, Math.ceil(contentHeight + chrome))))
 }
 
 // Init
