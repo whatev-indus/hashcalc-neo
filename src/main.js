@@ -227,10 +227,19 @@ listen('tauri://drag-drop', (event) => {
 // Settings window
 settingsBtn.addEventListener('click', () => invoke('open_settings'))
 
+let suppressResize = false
+
 listen('settings-saved', () => {
   visibleAlgos = loadVisible()
   checkedAlgos = loadChecked()
   renderAlgoList()
+  // Suppress ResizeObserver until settings window has fully closed, then resize once
+  suppressResize = true
+  clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    suppressResize = false
+    resizeWindowToContent()
+  }, 500)
 })
 
 async function resizeWindowToContent() {
@@ -251,6 +260,7 @@ resizeWindowToContent()
 
 let resizeTimer
 new ResizeObserver(() => {
+  if (suppressResize) return
   clearTimeout(resizeTimer)
   resizeTimer = setTimeout(resizeWindowToContent, 50)
 }).observe(document.getElementById('app'))
