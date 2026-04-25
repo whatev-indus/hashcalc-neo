@@ -1,6 +1,8 @@
 import { emit } from '@tauri-apps/api/event'
 import { getCurrentWindow, PhysicalSize } from '@tauri-apps/api/window'
 
+const win = getCurrentWindow()
+
 const ALL_ALGOS = [
   { id: 'size',      label: 'Size (bytes)' },
   { id: 'md5',       label: 'MD5' },
@@ -88,25 +90,31 @@ settingsSave.addEventListener('click', async () => {
   } catch {}
 
   await emit('settings-saved')
-  getCurrentWindow().hide()
+  await win.hide()
 })
+
+// Intercept native close button — hide instead of destroy to avoid WebKit crash
+win.onCloseRequested(async (event) => {
+  event.preventDefault()
+  await win.hide()
+})
+
+async function resizeToContent() {
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+  const outerSize = await win.outerSize()
+  const dpr = window.devicePixelRatio || 1
+  const vertChromePx = Math.max(0, outerSize.height - Math.round(window.innerHeight * dpr))
+  const page = document.getElementById('settings-page')
+  const bodyStyle = getComputedStyle(document.body)
+  const contentHeightPx = Math.round((page.getBoundingClientRect().bottom + parseFloat(bodyStyle.paddingBottom)) * dpr)
+  const newHeightPx = Math.max(Math.round(200 * dpr), contentHeightPx + vertChromePx)
+  await win.setSize(new PhysicalSize(outerSize.width, newHeightPx))
+}
 
 window.addEventListener('focus', () => {
   renderList()
   resizeToContent()
 })
-
-async function resizeToContent() {
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
-  const win = getCurrentWindow()
-  const outerSize = await win.outerSize()
-  const dpr = window.devicePixelRatio || 1
-  const vertChromePx = outerSize.height - Math.round(window.innerHeight * dpr)
-  const page = document.getElementById('settings-page')
-  const bodyStyle = getComputedStyle(document.body)
-  const contentHeightPx = Math.round((page.getBoundingClientRect().bottom + parseFloat(bodyStyle.paddingBottom)) * dpr)
-  await win.setSize(new PhysicalSize(outerSize.width, contentHeightPx + vertChromePx))
-}
 
 renderList()
 resizeToContent()
