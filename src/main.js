@@ -1,0 +1,211 @@
+import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
+import { open } from '@tauri-apps/plugin-dialog'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { LogicalSize } from '@tauri-apps/api/window'
+
+const ALL_ALGOS = [
+  { id: 'md5',       label: 'MD5' },
+  { id: 'sha1',      label: 'SHA-1' },
+  { id: 'sha224',    label: 'SHA-224' },
+  { id: 'sha256',    label: 'SHA-256' },
+  { id: 'sha384',    label: 'SHA-384' },
+  { id: 'sha512',    label: 'SHA-512' },
+  { id: 'sha3_256',  label: 'SHA-3 (256)' },
+  { id: 'sha3_512',  label: 'SHA-3 (512)' },
+  { id: 'blake2b',   label: 'BLAKE2b' },
+  { id: 'blake2s',   label: 'BLAKE2s' },
+  { id: 'blake3',    label: 'BLAKE3' },
+  { id: 'crc32',     label: 'CRC32' },
+  { id: 'adler32',   label: 'Adler-32' },
+  { id: 'ripemd160', label: 'RIPEMD-160' },
+  { id: 'whirlpool', label: 'Whirlpool' },
+]
+
+const STORAGE_KEY_VISIBLE = 'hashcalc_visible'
+const STORAGE_KEY_CHECKED = 'hashcalc_checked'
+
+const DEFAULT_HIDDEN = new Set(['adler32', 'sha224', 'sha3_512', 'blake2s', 'whirlpool'])
+
+function loadVisible() {
+  try {
+    const v = JSON.parse(localStorage.getItem(STORAGE_KEY_VISIBLE))
+    if (Array.isArray(v)) return new Set(v)
+  } catch {}
+  return new Set(ALL_ALGOS.map(a => a.id).filter(id => !DEFAULT_HIDDEN.has(id)))
+}
+
+function loadChecked() {
+  try {
+    const c = JSON.parse(localStorage.getItem(STORAGE_KEY_CHECKED))
+    if (Array.isArray(c)) return new Set(c)
+  } catch {}
+  return new Set(ALL_ALGOS.map(a => a.id))
+}
+
+let visibleAlgos = loadVisible()
+let checkedAlgos = loadChecked()
+let selectedFile  = null
+
+const headerBrowse = document.getElementById('header-browse')
+const algoList     = document.getElementById('algo-list')
+const progressWrap = document.getElementById('progress-wrap')
+const progressFill = document.getElementById('progress-fill')
+const progressLabel= document.getElementById('progress-label')
+const settingsBtn  = document.getElementById('settings-btn')
+
+// Build single-column algorithm rows with inline hash boxes
+function renderAlgoList() {
+  algoList.innerHTML = ''
+  const visible = ALL_ALGOS.filter(a => visibleAlgos.has(a.id))
+  visible.forEach(algo => {
+    const row = document.createElement('div')
+    row.className = 'algo-row'
+    row.dataset.id = algo.id
+
+    // Checkbox + label
+    const checkLabel = document.createElement('label')
+    checkLabel.className = 'algo-check-label'
+
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.value = algo.id
+    input.checked = checkedAlgos.has(algo.id)
+    input.addEventListener('change', () => {
+      if (input.checked) checkedAlgos.add(algo.id)
+      else checkedAlgos.delete(algo.id)
+      localStorage.setItem(STORAGE_KEY_CHECKED, JSON.stringify([...checkedAlgos]))
+    })
+
+    const box = document.createElement('span')
+    box.className = 'algo-checkbox'
+
+    checkLabel.appendChild(input)
+    checkLabel.appendChild(box)
+
+    // Algorithm name
+    const name = document.createElement('span')
+    name.className = 'algo-name'
+    name.textContent = algo.label
+
+    // Hash result box
+    const hashBox = document.createElement('div')
+    hashBox.className = 'hash-box'
+    hashBox.dataset.algoId = algo.id
+    hashBox.textContent = '—'
+    hashBox.title = 'Click to copy'
+    hashBox.addEventListener('click', () => {
+      if (!hashBox.classList.contains('has-value')) return
+      navigator.clipboard.writeText(hashBox.dataset.hash).then(() => {
+        hashBox.classList.add('copied')
+        hashBox.textContent = 'Copied!'
+        setTimeout(() => {
+          hashBox.classList.remove('copied')
+          hashBox.textContent = hashBox.dataset.hash
+        }, 1200)
+      })
+    })
+
+    row.appendChild(checkLabel)
+    row.appendChild(name)
+    row.appendChild(hashBox)
+    algoList.appendChild(row)
+  })
+}
+
+function setHashResult(algoId, hash) {
+  const hashBox = algoList.querySelector(`.hash-box[data-algo-id="${algoId}"]`)
+  if (!hashBox) return
+  hashBox.dataset.hash = hash
+  hashBox.textContent = hash
+  hashBox.classList.add('has-value')
+  hashBox.title = 'Click to copy'
+}
+
+function clearHashResults() {
+  algoList.querySelectorAll('.hash-box').forEach(box => {
+    box.dataset.hash = ''
+    box.textContent = '—'
+    box.classList.remove('has-value', 'copied')
+  })
+}
+
+async function calculateHashes(filePath) {
+  const selected = [...checkedAlgos].filter(id => visibleAlgos.has(id))
+  if (selected.length === 0) return
+
+  progressWrap.classList.remove('hidden')
+  clearHashResults()
+
+  const total = selected.length
+  let done = 0
+
+  for (const algoId of selected) {
+    progressLabel.textContent = `Computing ${algoId}...`
+    try {
+      const hash = await invoke('compute_hash', { filePath, algorithm: algoId })
+      setHashResult(algoId, hash)
+    } catch (err) {
+      setHashResult(algoId, `Error: ${err}`)
+    }
+    done++
+    progressFill.style.width = `${Math.round((done / total) * 100)}%`
+  }
+
+  progressWrap.classList.add('hidden')
+  progressFill.style.width = '0%'
+}
+
+// File selection
+function setFilePath(path) {
+  if (!path) return
+  selectedFile = { path, name: path.split(/[\\/]/).pop() }
+  calculateHashes(selectedFile.path)
+}
+
+async function openFilePicker() {
+  const path = await open({ multiple: false, directory: false })
+  if (path) setFilePath(path)
+}
+
+headerBrowse.addEventListener('click', openFilePicker)
+
+document.addEventListener('dragover', (e) => e.preventDefault())
+document.addEventListener('drop', (e) => e.preventDefault())
+
+// Tauri native drag-drop gives us the real file path
+listen('tauri://drag-drop', (event) => {
+  const paths = event.payload?.paths
+  if (paths && paths.length > 0) setFilePath(paths[0])
+})
+
+// Settings window
+settingsBtn.addEventListener('click', () => invoke('open_settings'))
+
+listen('settings-saved', () => {
+  visibleAlgos = loadVisible()
+  checkedAlgos = loadChecked()
+  renderAlgoList()
+})
+
+async function resizeWindowToContent() {
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+  const win = getCurrentWindow()
+  const outerSize = await win.outerSize()
+  const dpr = window.devicePixelRatio || 1
+  const chrome = outerSize.height / dpr - window.innerHeight
+  const app = document.getElementById('app')
+  const bodyStyle = getComputedStyle(document.body)
+  const contentHeight = app.getBoundingClientRect().bottom + parseFloat(bodyStyle.paddingBottom)
+  await win.setSize(new LogicalSize(outerSize.width / dpr, Math.ceil(contentHeight + chrome)))
+}
+
+// Init
+renderAlgoList()
+resizeWindowToContent()
+
+let resizeTimer
+new ResizeObserver(() => {
+  clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(resizeWindowToContent, 50)
+}).observe(document.getElementById('app'))
