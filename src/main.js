@@ -4,7 +4,12 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWindow, PhysicalSize } from '@tauri-apps/api/window'
 
 const ALL_ALGOS = [
+  { id: 'blake2b',   label: 'BLAKE2b' },
+  { id: 'blake2s',   label: 'BLAKE2s' },
+  { id: 'blake3',    label: 'BLAKE3' },
+  { id: 'crc32',     label: 'CRC32' },
   { id: 'md5',       label: 'MD5' },
+  { id: 'ripemd160', label: 'RIPEMD-160' },
   { id: 'sha1',      label: 'SHA-1' },
   { id: 'sha224',    label: 'SHA-224' },
   { id: 'sha256',    label: 'SHA-256' },
@@ -12,12 +17,6 @@ const ALL_ALGOS = [
   { id: 'sha512',    label: 'SHA-512' },
   { id: 'sha3_256',  label: 'SHA-3 (256)' },
   { id: 'sha3_512',  label: 'SHA-3 (512)' },
-  { id: 'blake2b',   label: 'BLAKE2b' },
-  { id: 'blake2s',   label: 'BLAKE2s' },
-  { id: 'blake3',    label: 'BLAKE3' },
-  { id: 'crc32',     label: 'CRC32' },
-  { id: 'adler32',   label: 'Adler-32' },
-  { id: 'ripemd160', label: 'RIPEMD-160' },
   { id: 'whirlpool', label: 'Whirlpool' },
 ]
 
@@ -29,7 +28,7 @@ const ALL_SETTINGS_ALGOS = [
 const STORAGE_KEY_VISIBLE = 'hashcalc_visible'
 const STORAGE_KEY_CHECKED = 'hashcalc_checked'
 
-const DEFAULT_HIDDEN = new Set(['adler32', 'sha224', 'sha3_512', 'blake2s', 'whirlpool'])
+const DEFAULT_HIDDEN = new Set(['sha224', 'sha3_512', 'blake2s', 'whirlpool'])
 
 function loadVisible() {
   try {
@@ -262,12 +261,6 @@ function renderSettingsPanel() {
     label.appendChild(box)
     label.appendChild(text)
     settingsList.appendChild(label)
-
-    if (i === 0) {
-      const divider = document.createElement('div')
-      divider.className = 'settings-divider'
-      settingsList.appendChild(divider)
-    }
   })
 }
 
@@ -277,23 +270,6 @@ settingsBtn.addEventListener('click', () => {
   resizeWindowToContent()
 })
 
-document.getElementById('settings-all').addEventListener('click', () => {
-  visibleAlgos = new Set(ALL_SETTINGS_ALGOS.map(a => a.id))
-  localStorage.setItem(STORAGE_KEY_VISIBLE, JSON.stringify([...visibleAlgos]))
-  renderSettingsPanel()
-  renderAlgoList()
-  resizeWindowToContent()
-})
-
-document.getElementById('settings-none').addEventListener('click', () => {
-  visibleAlgos = new Set()
-  checkedAlgos = new Set()
-  localStorage.setItem(STORAGE_KEY_VISIBLE, JSON.stringify([]))
-  localStorage.setItem(STORAGE_KEY_CHECKED, JSON.stringify([]))
-  renderSettingsPanel()
-  renderAlgoList()
-  resizeWindowToContent()
-})
 
 let lastSetHeightPx = 0
 

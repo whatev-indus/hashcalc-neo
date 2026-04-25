@@ -254,6 +254,7 @@ header h1 {
   cursor: pointer;
   user-select: none;
   transition: background 0.1s;
+  break-inside: avoid;
 }
 .settings-item:hover { background: var(--surface-2); }
 .settings-item input[type="checkbox"] { display: none; }
@@ -296,28 +297,9 @@ header h1 {
 }
 
 #settings-panel-list {
-  display: flex;
-  flex-direction: column;
-  padding: 4px 6px;
+  column-count: 3;
+  padding: 6px 8px;
 }
 
-#settings-panel-footer {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  padding: 6px 10px;
-  border-top: 1px solid var(--border);
-}
-#settings-panel-footer button {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  padding: 5px 12px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-#settings-panel-footer button:hover { border-color: var(--accent); }
 
 .hidden { display: none !important; }

@@ -121,15 +121,6 @@ fn compute_hash(file_path: String, algorithm: String) -> Result<String, String> 
             }
             Ok(format!("{:08x}", hasher.finalize()))
         }
-        "adler32" => {
-            let mut adler = adler::Adler32::new();
-            loop {
-                let n = reader.read(&mut buf).map_err(|e| e.to_string())?;
-                if n == 0 { break; }
-                adler.write_slice(&buf[..n]);
-            }
-            Ok(format!("{:08x}", adler.checksum()))
-        }
         "ripemd160" => {
             let mut hasher = ripemd::Ripemd160::new();
             loop {
