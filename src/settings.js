@@ -1,5 +1,5 @@
 import { emit } from '@tauri-apps/api/event'
-import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
+import { getCurrentWindow, PhysicalSize } from '@tauri-apps/api/window'
 
 const ALL_ALGOS = [
   { id: 'size',      label: 'Size (bytes)' },
@@ -101,11 +101,11 @@ async function resizeToContent() {
   const win = getCurrentWindow()
   const outerSize = await win.outerSize()
   const dpr = window.devicePixelRatio || 1
-  const chrome = outerSize.height / dpr - window.innerHeight
+  const vertChromePx = outerSize.height - Math.round(window.innerHeight * dpr)
   const page = document.getElementById('settings-page')
   const bodyStyle = getComputedStyle(document.body)
-  const contentHeight = page.getBoundingClientRect().bottom + parseFloat(bodyStyle.paddingBottom)
-  await win.setSize(new LogicalSize(outerSize.width / dpr, Math.ceil(contentHeight + chrome)))
+  const contentHeightPx = Math.round((page.getBoundingClientRect().bottom + parseFloat(bodyStyle.paddingBottom)) * dpr)
+  await win.setSize(new PhysicalSize(outerSize.width, contentHeightPx + vertChromePx))
 }
 
 renderList()

@@ -1,8 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
-import { getCurrentWindow } from '@tauri-apps/api/window'
-import { LogicalSize } from '@tauri-apps/api/window'
+import { getCurrentWindow, PhysicalSize } from '@tauri-apps/api/window'
 
 const ALL_ALGOS = [
   { id: 'md5',       label: 'MD5' },
@@ -234,21 +233,21 @@ listen('settings-saved', async () => {
   await resizeWindowToContent()
 })
 
-let lastSetHeight = 0
+let lastSetHeightPx = 0
 
 async function resizeWindowToContent() {
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
   const win = getCurrentWindow()
   const outerSize = await win.outerSize()
   const dpr = window.devicePixelRatio || 1
-  const chrome = outerSize.height / dpr - window.innerHeight
+  const vertChromePx = outerSize.height - Math.round(window.innerHeight * dpr)
   const app = document.getElementById('app')
   const bodyStyle = getComputedStyle(document.body)
-  const contentHeight = app.getBoundingClientRect().bottom + parseFloat(bodyStyle.paddingBottom)
-  const newHeight = Math.max(200, Math.ceil(contentHeight + chrome))
-  if (newHeight === lastSetHeight) return
-  lastSetHeight = newHeight
-  await win.setSize(new LogicalSize(Math.round(outerSize.width / dpr), newHeight))
+  const contentHeightPx = Math.round((app.getBoundingClientRect().bottom + parseFloat(bodyStyle.paddingBottom)) * dpr)
+  const newHeightPx = Math.max(Math.round(200 * dpr), contentHeightPx + vertChromePx)
+  if (newHeightPx === lastSetHeightPx) return
+  lastSetHeightPx = newHeightPx
+  await win.setSize(new PhysicalSize(outerSize.width, newHeightPx))
 }
 
 // Init
