@@ -1,6 +1,6 @@
 [package]
 name = "hashcalc-neo"
-version = "1.0.0"
+version = "1.0.1"
 description = "HashCalc Neo — modern hash calculator"
 authors = []
 license = ""

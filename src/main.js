@@ -160,7 +160,7 @@ async function calculateHashes(filePath) {
   if (visibleAlgos.has('size')) {
     try {
       const bytes = await invoke('get_file_size', { filePath })
-      const display = bytes.toLocaleString() + ' bytes'
+      const display = String(bytes)
       sizeValue.dataset.size = display
       sizeValue.textContent = display
       sizeValue.classList.add('has-value')
