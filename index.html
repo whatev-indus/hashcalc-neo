@@ -25,6 +25,11 @@
 
     <!-- Algorithm rows with inline hash results -->
     <div id="algo-section">
+      <div id="file-name-row" class="algo-row">
+        <span class="algo-spacer"></span>
+        <span class="algo-name">File Name</span>
+        <div id="file-name-value" class="hash-box file-name-box has-value">File not yet selected.</div>
+      </div>
       <div id="size-row" class="algo-row hidden">
         <span class="algo-spacer"></span>
         <span class="algo-name">Size</span>
@@ -38,6 +43,26 @@
       <div id="progress-bar"><div id="progress-fill"></div></div>
       <span id="progress-label">Computing...</span>
     </div>
+
+    <!-- File comparison -->
+    <section id="compare-panel" class="compare-panel collapsed">
+      <button id="compare-toggle" class="compare-toggle" type="button" aria-expanded="false">
+        <span>Compare</span>
+        <span class="compare-toggle-icon">▴</span>
+      </button>
+      <div id="compare-body" class="compare-body hidden">
+        <button id="compare-dropzone" class="compare-dropzone has-value" type="button">
+          <span id="compare-file-label" class="compare-file-label">Drag and drop or select a secondary file to compare hashes.</span>
+        </button>
+        <div class="compare-actions">
+          <button id="compare-run" class="compare-run" type="button">Compare</button>
+          <div id="compare-status" class="compare-status">
+            <span>Status</span>
+            <strong id="compare-result">—</strong>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <footer id="app-footer">
       <a href="https://sites.google.com/view/whateverindustries/home" target="_blank" rel="noopener noreferrer">whatev.indus</a>

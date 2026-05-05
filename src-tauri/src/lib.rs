@@ -65,6 +65,24 @@ fn compute_hash(file_path: String, algorithm: String) -> Result<String, String> 
             }
             Ok(encode(hasher.finalize()))
         }
+        "sha512_224" => {
+            let mut hasher = sha2::Sha512_224::new();
+            loop {
+                let n = reader.read(&mut buf).map_err(|e| e.to_string())?;
+                if n == 0 { break; }
+                hasher.update(&buf[..n]);
+            }
+            Ok(encode(hasher.finalize()))
+        }
+        "sha512_256" => {
+            let mut hasher = sha2::Sha512_256::new();
+            loop {
+                let n = reader.read(&mut buf).map_err(|e| e.to_string())?;
+                if n == 0 { break; }
+                hasher.update(&buf[..n]);
+            }
+            Ok(encode(hasher.finalize()))
+        }
         "sha3_256" => {
             let mut hasher = sha3::Sha3_256::new();
             loop {

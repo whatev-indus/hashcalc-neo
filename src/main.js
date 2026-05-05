@@ -15,27 +15,63 @@ const ALL_ALGOS = [
   { id: 'sha256',    label: 'SHA-256' },
   { id: 'sha384',    label: 'SHA-384' },
   { id: 'sha512',    label: 'SHA-512' },
+  { id: 'sha512_224', label: 'SHA-512/224' },
+  { id: 'sha512_256', label: 'SHA-512/256' },
   { id: 'sha3_256',  label: 'SHA-3 (256)' },
   { id: 'sha3_512',  label: 'SHA-3 (512)' },
   { id: 'whirlpool', label: 'Whirlpool' },
 ]
 
 const ALL_SETTINGS_ALGOS = [
+  { id: 'filename', label: 'File Name' },
   { id: 'size', label: 'Size (bytes)' },
   ...ALL_ALGOS,
 ]
 
 const STORAGE_KEY_VISIBLE = 'hashcalc_visible'
 const STORAGE_KEY_CHECKED = 'hashcalc_checked'
+const STORAGE_KEY_THEME = 'hashcalc_theme'
+const STORAGE_KEY_VISIBLE_SCHEMA = 'hashcalc_visible_schema'
 
-const DEFAULT_HIDDEN = new Set(['sha224', 'sha3_512', 'blake2s', 'whirlpool'])
+const THEMES = [
+  { id: 'neo', label: 'Neo' },
+  { id: 'modern-light', label: 'Modern Light' },
+  { id: 'modern-dark', label: 'Modern Dark' },
+  { id: 'classic', label: 'Classic' },
+]
+
+const DEFAULT_HIDDEN = new Set([
+  'blake2b',
+  'blake2s',
+  'ripemd160',
+  'sha224',
+  'sha384',
+  'sha512_224',
+  'sha512_256',
+  'sha3_512',
+  'whirlpool',
+])
 
 function loadVisible() {
   try {
     const v = JSON.parse(localStorage.getItem(STORAGE_KEY_VISIBLE))
-    if (Array.isArray(v)) return new Set(v)
+    if (Array.isArray(v)) {
+      const visible = new Set(v)
+      if (localStorage.getItem(STORAGE_KEY_VISIBLE_SCHEMA) !== '3') {
+        visible.add('filename')
+        visible.add('size')
+        localStorage.setItem(STORAGE_KEY_VISIBLE, JSON.stringify([...visible]))
+        localStorage.setItem(STORAGE_KEY_VISIBLE_SCHEMA, '3')
+      }
+      return visible
+    }
   } catch {}
-  return new Set(ALL_ALGOS.map(a => a.id).filter(id => !DEFAULT_HIDDEN.has(id)))
+  localStorage.setItem(STORAGE_KEY_VISIBLE_SCHEMA, '3')
+  return new Set([
+    'filename',
+    'size',
+    ...ALL_ALGOS.map(a => a.id).filter(id => !DEFAULT_HIDDEN.has(id)),
+  ])
 }
 
 function loadChecked() {
@@ -46,12 +82,27 @@ function loadChecked() {
   return new Set(ALL_ALGOS.map(a => a.id))
 }
 
+function loadTheme() {
+  const theme = localStorage.getItem(STORAGE_KEY_THEME)
+  return THEMES.some(t => t.id === theme) ? theme : 'neo'
+}
+
+function applyTheme(theme) {
+  document.body.dataset.theme = theme
+  document.title = theme === 'classic' ? 'HashCalc' : 'HashCalc Neo'
+}
+
 let visibleAlgos = loadVisible()
 let checkedAlgos = loadChecked()
+let currentTheme = loadTheme()
 let selectedFile  = null
+let compareFile = null
+let compareDropActive = false
 
 const headerBrowse   = document.getElementById('header-browse')
+const algoSection    = document.getElementById('algo-section')
 const algoList       = document.getElementById('algo-list')
+const fileNameValue  = document.getElementById('file-name-value')
 const sizeRow        = document.getElementById('size-row')
 const sizeValue      = document.getElementById('size-value')
 const progressWrap   = document.getElementById('progress-wrap')
@@ -60,10 +111,21 @@ const progressLabel  = document.getElementById('progress-label')
 const settingsBtn    = document.getElementById('settings-btn')
 const settingsPanel  = document.getElementById('settings-panel')
 const settingsList   = document.getElementById('settings-panel-list')
+const comparePanel   = document.getElementById('compare-panel')
+const compareToggle  = document.getElementById('compare-toggle')
+const compareBody    = document.getElementById('compare-body')
+const compareDropzone = document.getElementById('compare-dropzone')
+const compareFileLabel = document.getElementById('compare-file-label')
+const compareRun     = document.getElementById('compare-run')
+const compareStatus  = document.getElementById('compare-status')
+const compareResult  = document.getElementById('compare-result')
+
+applyTheme(currentTheme)
 
 // Build single-column algorithm rows with inline hash boxes
 function renderAlgoList() {
   algoList.innerHTML = ''
+  document.getElementById('file-name-row').classList.toggle('hidden', !visibleAlgos.has('filename'))
   sizeRow.classList.toggle('hidden', !visibleAlgos.has('size'))
 
   const visible = ALL_ALGOS.filter(a => visibleAlgos.has(a.id))
@@ -193,10 +255,77 @@ async function calculateHashes(filePath) {
   progressFill.style.width = '0%'
 }
 
+function getComparableAlgos() {
+  return [...checkedAlgos].filter(id => visibleAlgos.has(id))
+}
+
+function setCompareResult(message, state = '') {
+  compareResult.textContent = message
+  compareStatus.dataset.state = state
+}
+
+function setCompareFile(path) {
+  if (!path) return
+  compareFile = { path, name: path.split(/[\\/]/).pop() }
+  compareFileLabel.textContent = compareFile.name
+  compareDropzone.title = compareFile.path
+  compareDropzone.classList.add('has-file')
+  setCompareResult('Ready.')
+  resizeWindowToContent()
+}
+
+async function openCompareFilePicker() {
+  const path = await open({ multiple: false, directory: false })
+  if (path) setCompareFile(path)
+}
+
+async function compareFiles() {
+  if (!selectedFile) {
+    setCompareResult('Select a main file first.', 'neutral')
+    return
+  }
+  if (!compareFile) {
+    setCompareResult('Select a comparison file.', 'neutral')
+    return
+  }
+
+  const selected = getComparableAlgos()
+  if (selected.length === 0) {
+    setCompareResult('Select at least one hash.', 'neutral')
+    return
+  }
+
+  compareRun.disabled = true
+  setCompareResult('Comparing...', 'neutral')
+
+  try {
+    for (const algoId of selected) {
+      const [mainHash, compareHash] = await Promise.all([
+        invoke('compute_hash', { filePath: selectedFile.path, algorithm: algoId }),
+        invoke('compute_hash', { filePath: compareFile.path, algorithm: algoId }),
+      ])
+      if (mainHash !== compareHash) {
+        setCompareResult('Files do not match.', 'mismatch')
+        return
+      }
+    }
+    setCompareResult('Files match.', 'match')
+  } catch (err) {
+    setCompareResult(`Error: ${err}`, 'neutral')
+  } finally {
+    compareRun.disabled = false
+    resizeWindowToContent()
+  }
+}
+
 // File selection
 function setFilePath(path) {
   if (!path) return
   selectedFile = { path, name: path.split(/[\\/]/).pop() }
+  fileNameValue.textContent = selectedFile.name
+  fileNameValue.title = selectedFile.path
+  fileNameValue.classList.add('has-value')
+  algoSection.classList.add('has-file')
   calculateHashes(selectedFile.path)
 }
 
@@ -220,19 +349,140 @@ sizeValue.addEventListener('click', () => {
 
 headerBrowse.addEventListener('click', openFilePicker)
 
-document.addEventListener('dragover', (e) => e.preventDefault())
+compareToggle.addEventListener('click', () => {
+  const nowOpen = comparePanel.classList.toggle('collapsed') === false
+  compareBody.classList.toggle('hidden', !nowOpen)
+  compareToggle.setAttribute('aria-expanded', String(nowOpen))
+  resizeWindowToContent()
+})
+
+compareDropzone.addEventListener('click', openCompareFilePicker)
+compareDropzone.addEventListener('dragenter', () => {
+  compareDropActive = true
+  compareDropzone.classList.add('drag-over')
+})
+compareDropzone.addEventListener('dragover', (e) => {
+  e.preventDefault()
+  compareDropActive = true
+  compareDropzone.classList.add('drag-over')
+})
+compareDropzone.addEventListener('dragleave', () => {
+  compareDropActive = false
+  compareDropzone.classList.remove('drag-over')
+})
+compareRun.addEventListener('click', compareFiles)
+
+document.addEventListener('dragover', (e) => {
+  e.preventDefault()
+  const target = document.elementFromPoint(e.clientX, e.clientY)
+  const mainDropActive = algoSection.contains(target)
+  compareDropActive = compareBody.classList.contains('hidden') === false && compareDropzone.contains(target)
+  algoSection.classList.toggle('drag-over', mainDropActive && !compareDropActive)
+  compareDropzone.classList.toggle('drag-over', compareDropActive)
+})
+document.addEventListener('dragleave', () => {
+  compareDropActive = false
+  algoSection.classList.remove('drag-over')
+  compareDropzone.classList.remove('drag-over')
+})
 document.addEventListener('drop', (e) => e.preventDefault())
+
+function dropPointHitsElement(position, element) {
+  if (!position) return false
+
+  const dpr = window.devicePixelRatio || 1
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const points = [{ x: position.x, y: position.y }]
+
+  if (position.x > viewportWidth || position.y > viewportHeight) {
+    points.push({ x: position.x / dpr, y: position.y / dpr })
+  }
+
+  return points.some(point => {
+    const rect = element.getBoundingClientRect()
+    const inRect = point.x >= rect.left
+      && point.x <= rect.right
+      && point.y >= rect.top
+      && point.y <= rect.bottom
+    if (inRect) return true
+
+    const target = document.elementFromPoint(point.x, point.y)
+    return Boolean(target && element.contains(target))
+  })
+}
 
 // Tauri native drag-drop gives us the real file path
 listen('tauri://drag-drop', (event) => {
   const paths = event.payload?.paths
-  if (paths && paths.length > 0) setFilePath(paths[0])
+  if (!paths || paths.length === 0) return
+
+  const position = event.payload?.position
+  const droppedOnCompare = compareBody.classList.contains('hidden') === false
+    && dropPointHitsElement(position, compareDropzone)
+  const droppedOnMain = dropPointHitsElement(position, algoSection)
+
+  compareDropActive = false
+  algoSection.classList.remove('drag-over')
+  compareDropzone.classList.remove('drag-over')
+
+  if (droppedOnCompare) setCompareFile(paths[0])
+  else if (droppedOnMain) setFilePath(paths[0])
 })
 
 // Inline settings panel
+function renderThemeSettings() {
+  const section = document.createElement('div')
+  section.className = 'settings-theme'
+
+  const title = document.createElement('div')
+  title.className = 'settings-theme-title'
+  title.textContent = 'Theme'
+
+  const group = document.createElement('div')
+  group.className = 'theme-toggle'
+  group.setAttribute('role', 'radiogroup')
+  group.setAttribute('aria-label', 'Theme')
+
+  THEMES.forEach(theme => {
+    const label = document.createElement('label')
+    label.className = 'theme-choice'
+
+    const input = document.createElement('input')
+    input.type = 'radio'
+    input.name = 'theme'
+    input.value = theme.id
+    input.checked = currentTheme === theme.id
+    input.addEventListener('change', () => {
+      if (!input.checked) return
+      currentTheme = theme.id
+      localStorage.setItem(STORAGE_KEY_THEME, currentTheme)
+      applyTheme(currentTheme)
+      resizeWindowToContent()
+    })
+
+    const text = document.createElement('span')
+    text.textContent = theme.label
+
+    label.appendChild(input)
+    label.appendChild(text)
+    group.appendChild(label)
+  })
+
+  section.appendChild(title)
+  section.appendChild(group)
+  settingsList.appendChild(section)
+}
+
 function renderSettingsPanel() {
   settingsList.innerHTML = ''
-  ALL_SETTINGS_ALGOS.forEach((algo, i) => {
+  renderThemeSettings()
+
+  const divider = document.createElement('div')
+  divider.className = 'settings-divider'
+  settingsList.appendChild(divider)
+
+  ALL_SETTINGS_ALGOS.forEach(algo => {
     const label = document.createElement('label')
     label.className = 'settings-item'
 
