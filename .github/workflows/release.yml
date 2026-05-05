@@ -9,7 +9,40 @@ permissions:
   contents: write
 
 jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > notes.md <<'EOF'
+          HashCalc Neo release build.
+          EOF
+
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --title "HashCalc Neo ${{ github.ref_name }}" \
+            --notes-file notes.md \
+            --draft \
+            || gh release edit "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --title "HashCalc Neo ${{ github.ref_name }}" \
+              --notes-file notes.md \
+              --draft=true
+
+          gh release view "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --json assets \
+            --jq '.assets[].name' \
+            | while IFS= read -r asset; do
+              gh release delete-asset "${{ github.ref_name }}" "$asset" \
+                --repo "${{ github.repository }}" \
+                --yes
+            done
+
   build-macos:
+    needs: prepare-release
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +61,7 @@ jobs:
 
       - run: npm run tauri build -- --bundles app
 
-      - name: Package and publish release
+      - name: Package and upload macOS app
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -36,32 +69,27 @@ jobs:
           codesign --force --deep --sign - "$APP_PATH"
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
-          ZIP_NAME="HashCalc.Neo_${VERSION}_macOS.zip"
+          ZIP_NAME="HashCalc.Neo_macOS_ARM_v${VERSION}.zip"
           ditto -c -k --keepParent "$APP_PATH" "$ZIP_NAME"
-          printf 'Download the appropriate file for your platform below.\n\n> ⚠️ Windows & Linux builds not yet tested.\n\n> **macOS:** If macOS blocks the app, right-click → Open to bypass Gatekeeper.' > notes.md
-          gh release create "${{ github.ref_name }}" \
-            --title "HashCalc Neo ${{ github.ref_name }}" \
-            --notes-file notes.md \
-            --draft \
-            "$ZIP_NAME" \
-            || gh release upload "${{ github.ref_name }}" "$ZIP_NAME" --repo "${{ github.repository }}" --clobber
+          gh release upload "${{ github.ref_name }}" "$ZIP_NAME" \
+            --repo "${{ github.repository }}" \
+            --clobber
 
-  build-windows-linux:
-    needs: build-macos
+  build-linux:
+    needs: prepare-release
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: ubuntu-22.04
-            args: '--bundles appimage'
-          - platform: windows-latest
-            args: '--bundles msi'
-    runs-on: ${{ matrix.platform }}
+          - runner: ubuntu-22.04
+            arch: x64
+          - runner: ubuntu-22.04-arm
+            arch: ARM
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
@@ -78,18 +106,59 @@ jobs:
 
       - run: npm install
 
-      - uses: tauri-apps/tauri-action@v0
+      - run: npm run tauri build -- --bundles appimage
+
+      - name: Rename and upload Linux AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          APPIMAGE_PATH=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name "*.AppImage" | head -1)
+          APPIMAGE_NAME="HashCalc.Neo_Linux_${{ matrix.arch }}_v${VERSION}.AppImage"
+          mv "$APPIMAGE_PATH" "$APPIMAGE_NAME"
+          gh release upload "${{ github.ref_name }}" "$APPIMAGE_NAME" \
+            --repo "${{ github.repository }}" \
+            --clobber
+
+  build-windows:
+    needs: prepare-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+          - runner: windows-11-arm
+            arch: ARM
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'HashCalc Neo ${{ github.ref_name }}'
-          releaseBody: |
-            Download the appropriate file for your platform below.
+          node-version: lts/*
 
-            > ⚠️ Windows & Linux builds not yet tested.
+      - uses: dtolnay/rust-toolchain@stable
 
-            > **macOS:** If macOS blocks the app, right-click → Open to bypass Gatekeeper.
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - run: npm install
+
+      - run: npm run tauri build -- --bundles msi
+
+      - name: Rename and upload Windows MSI
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          MSI_PATH=$(find src-tauri/target/release/bundle/msi -maxdepth 1 -name "*.msi" | head -1)
+          MSI_NAME="HashCalc.Neo_Windows_${{ matrix.arch }}_v${VERSION}.msi"
+          mv "$MSI_PATH" "$MSI_NAME"
+          gh release upload "${{ github.ref_name }}" "$MSI_NAME" \
+            --repo "${{ github.repository }}" \
+            --clobber
